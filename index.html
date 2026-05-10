@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e0f">
+<meta name="description" content="Identify a plant from a photo and see how old its lineage is, on a 600-million-year time axis.">
+<title>Phylo-Age</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0a0e0f;
+    color: #e8eaed;
+    min-height: 100vh;
+    line-height: 1.45;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px 40px;
+  }
+  header {
+    text-align: center;
+    margin: 8px 0 24px;
+  }
+  header h1 {
+    font-size: 1.7rem; font-weight: 300; letter-spacing: -0.02em;
+    background: linear-gradient(90deg, #67A599, #34B2C9, #FD9A52, #F04028);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+  }
+  header p { color: #99a; margin-top: 4px; font-size: 0.92rem; }
+
+  .card {
+    background: #131818;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 1.05rem; font-weight: 500; margin-bottom: 10px; color: #ddd; }
+  .card h3 { font-size: 0.92rem; font-weight: 500; margin-bottom: 8px; color: #aab; letter-spacing: 0.02em; }
+
+  /* ---------- Upload ---------- */
+  .upload-zone {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px;
+    width: 100%; min-height: 180px;
+    border: 2px dashed #2c3434; border-radius: 14px;
+    background: #131818;
+    cursor: pointer;
+    color: #99a;
+    transition: all 0.15s;
+    text-align: center;
+    padding: 24px 16px;
+  }
+  .upload-zone:hover, .upload-zone:focus-visible {
+    border-color: #67A599; background: #161d1d; color: #cde;
+  }
+  .upload-zone svg { width: 36px; height: 36px; opacity: 0.6; }
+  .upload-zone strong { color: #ddd; font-weight: 500; font-size: 1rem; }
+  .upload-zone span { font-size: 0.85rem; }
+  input[type="file"] { display: none; }
+
+  /* ---------- API key ---------- */
+  details.key-setup { margin-top: 12px; }
+  details.key-setup summary {
+    cursor: pointer; padding: 10px 14px; border-radius: 10px;
+    background: #1a2020; color: #cde; font-size: 0.88rem;
+    list-style: none;
+  }
+  details.key-setup summary::-webkit-details-marker { display: none; }
+  details.key-setup summary::before {
+    content: '⚙'; margin-right: 6px; opacity: 0.7;
+  }
+  details.key-setup[open] summary {
+    border-radius: 10px 10px 0 0;
+    background: #1f2727;
+  }
+  .key-body {
+    background: #1a2020;
+    padding: 12px 14px 14px;
+    border-radius: 0 0 10px 10px;
+    font-size: 0.85rem;
+    color: #abb;
+  }
+  .key-body input[type="password"] {
+    width: 100%;
+    background: #0e1212; color: #fff;
+    border: 1px solid #2c3434;
+    padding: 9px 12px; border-radius: 8px;
+    font-size: 14px; font-family: ui-monospace, monospace;
+    margin-top: 8px;
+  }
+  .key-body input[type="password"]:focus { outline: 2px solid #67A599; outline-offset: -1px; }
+  .key-body a { color: #67A599; }
+  .key-status {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 8px; font-size: 0.82rem;
+  }
+  .key-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #f04028;
+  }
+  .key-status.ok .dot { background: #7fc64e; }
+
+  /* ---------- Photo ---------- */
+  .photo-card { padding: 0; overflow: hidden; }
+  .photo-card img {
+    width: 100%; height: auto;
+    display: block;
+    max-height: 380px;
+    object-fit: cover;
+  }
+
+  /* ---------- Status ---------- */
+  #status {
+    color: #abb; font-size: 0.88rem;
+    padding: 6px 4px; min-height: 22px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #status.error { color: #ff8c7a; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid #2c3434; border-top-color: #67A599;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Identification card ---------- */
+  .id-species {
+    font-size: 1.4rem; font-weight: 500; font-style: italic;
+    color: #fff; line-height: 1.2;
+  }
+  .id-common { color: #abb; font-size: 0.95rem; margin-top: 2px; }
+  .id-confidence {
+    display: inline-block; margin-top: 8px;
+    background: rgba(127,198,78,0.13); color: #9bdc6f;
+    padding: 3px 10px; border-radius: 99px;
+    font-size: 0.78rem; font-weight: 500;
+  }
+  .id-confidence.low { background: rgba(253,154,82,0.13); color: #fbc28a; }
+
+  /* ---------- Lineage ---------- */
+  .lineage-list { list-style: none; }
+  .lineage-row {
+    display: grid;
+    grid-template-columns: 18px 88px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 0;
+    font-size: 0.92rem;
+  }
+  .lineage-row + .lineage-row { border-top: 1px solid #1d2424; }
+  .lineage-swatch {
+    width: 12px; height: 12px; border-radius: 3px;
+    align-self: center;
+  }
+  .lineage-rank {
+    color: #788; font-size: 0.78rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .lineage-name { color: #ddd; font-weight: 500; }
+  .lineage-name i { font-style: italic; color: #fff; }
+  .lineage-name .common { color: #889; font-style: normal; font-size: 0.85em; margin-left: 4px; }
+  .lineage-age {
+    font-variant-numeric: tabular-nums;
+    color: #cde; font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* ---------- Timeline ---------- */
+  .timeline-card { padding: 14px 12px 16px; }
+  .timeline-svg { display: block; width: 100%; height: auto; }
+  .timeline-axis-labels {
+    display: flex; justify-content: space-between;
+    color: #788; font-size: 0.72rem;
+    margin: 4px 4px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .callout {
+    background: rgba(103,165,153,0.08);
+    border-left: 3px solid #67A599;
+    padding: 10px 12px;
+    margin-top: 12px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.86rem; color: #cde;
+    line-height: 1.5;
+  }
+  .callout strong { color: #fff; font-weight: 500; }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    width: 100%;
+    border: none;
+    background: #67A599; color: #0a0e0f;
+    padding: 13px 18px;
+    border-radius: 10px;
+    font-size: 0.95rem; font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+    font-family: inherit;
+    transition: filter 0.15s;
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:active { filter: brightness(0.92); }
+  .btn.secondary {
+    background: #1f2727; color: #cde;
+  }
+  .btn.secondary:hover { background: #283131; }
+
+  /* ---------- Layout helpers ---------- */
+  [hidden] { display: none !important; }
+  .footnote {
+    text-align: center;
+    color: #566;
+    font-size: 0.74rem;
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+  .footnote a { color: #788; }
+
+  /* ---------- Tablet+ ---------- */
+  @media (min-width: 700px) {
+    main { max-width: 560px; padding: 24px 18px 60px; }
+    header h1 { font-size: 2.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+<header>
+  <h1>Phylo-Age</h1>
+  <p>Take a photo of a plant. See how deep into time its lineage runs.</p>
+</header>
+
+<!-- ============ Upload step ============ -->
+<section id="upload-step">
+
+  <label class="upload-zone" for="file-input" tabindex="0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="6" width="18" height="14" rx="2"/>
+      <circle cx="12" cy="13" r="4"/>
+      <path d="M9 6l1.5-2h3L15 6"/>
+    </svg>
+    <strong>Take a photo</strong>
+    <span>or choose from your library</span>
+  </label>
+  <input type="file" id="file-input" accept="image/*" capture="environment">
+
+  <details class="key-setup" id="key-details">
+    <summary id="key-summary">Pl@ntNet API key — required for identification</summary>
+    <div class="key-body">
+      Identification uses Pl@ntNet's free public API. Sign up for a key at
+      <a href="https://my.plantnet.org/" target="_blank" rel="noopener">my.plantnet.org</a>
+      (free, 500 IDs/day) and paste it below. Stored only in your browser.
+      <input type="password" id="api-key" autocomplete="off" placeholder="Paste your Pl@ntNet API key" spellcheck="false">
+      <div class="key-status" id="key-status"><span class="dot"></span><span id="key-status-text">No key set</span></div>
+    </div>
+  </details>
+
+</section>
+
+<!-- ============ Result step ============ -->
+<section id="result-step" hidden>
+  <div class="card photo-card"><img id="photo" alt="Your plant photo"></div>
+
+  <div id="status"></div>
+
+  <div class="card" id="id-card" hidden>
+    <div class="id-species" id="id-species"></div>
+    <div class="id-common" id="id-common"></div>
+    <span class="id-confidence" id="id-confidence" hidden></span>
+  </div>
+
+  <div class="card" id="lineage-card" hidden>
+    <h2>Lineage</h2>
+    <ul class="lineage-list" id="lineage-list"></ul>
+  </div>
+
+  <div class="card timeline-card" id="timeline-card" hidden>
+    <h2>On the timeline of life (last 600 Myr)</h2>
+    <svg class="timeline-svg" id="timeline-svg" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="timeline-axis-labels">
+      <span>600 Myr ago</span>
+      <span>today</span>
+    </div>
+    <div class="callout" id="callout" hidden></div>
+  </div>
+
+  <button class="btn secondary" id="reset-btn">Try another photo</button>
+</section>
+
+<p class="footnote">
+  Family ages from TimeTree.org &amp; Magallón et&nbsp;al. 2015 ·
+  Geological scale: ICS v2023 ·
+  Identification by <a href="https://plantnet.org/" target="_blank" rel="noopener">Pl@ntNet</a>
+</p>
+
+</main>
+
+<script>
+'use strict';
+
+// ============================================================
+// Geological time scale (ICS standard colours)
+// ============================================================
+const EPOCHS = [
+  { name: 'Quaternary',    start:   2.6, end:   0,   color: '#F9F97F', short: 'Q' },
+  { name: 'Neogene',       start:  23,   end:   2.6, color: '#FFE619', short: 'Ne' },
+  { name: 'Paleogene',     start:  66,   end:  23,   color: '#FD9A52', short: 'Pg' },
+  { name: 'Cretaceous',    start: 145,   end:  66,   color: '#7FC64E', short: 'K' },
+  { name: 'Jurassic',      start: 201,   end: 145,   color: '#34B2C9', short: 'J' },
+  { name: 'Triassic',      start: 252,   end: 201,   color: '#812B92', short: 'Tr' },
+  { name: 'Permian',       start: 299,   end: 252,   color: '#F04028', short: 'P' },
+  { name: 'Carboniferous', start: 359,   end: 299,   color: '#67A599', short: 'C' },
+  { name: 'Devonian',      start: 419,   end: 359,   color: '#CB8C37', short: 'D' },
+  { name: 'Silurian',      start: 444,   end: 419,   color: '#B3E1B6', short: 'S' },
+  { name: 'Ordovician',    start: 485,   end: 444,   color: '#1A9D6F', short: 'O' },
+  { name: 'Cambrian',      start: 538,   end: 485,   color: '#85B66F', short: 'Cm' },
+];
+
+const ERAS = [
+  { name: 'Paleozoic', start: 538, end: 252 },
+  { name: 'Mesozoic', start: 252, end:  66 },
+  { name: 'Cenozoic', start:  66, end:   0 },
+];
+
+function epochForAge(myr) {
+  for (const e of EPOCHS) if (myr >= e.end && myr < e.start) return e;
+  return EPOCHS[EPOCHS.length - 1];
+}
+
+// ============================================================
+// Universal anchors — added to every plant's lineage where applicable
+// ============================================================
+const UNIVERSAL = {
+  land: { name: 'Land plants',     scientific: 'Embryophyta',  age: 470, note: 'first plants colonise land' },
+  vasc: { name: 'Vascular plants', scientific: 'Tracheophyta', age: 420, note: 'plumbing for water + sugar' },
+  seed: { name: 'Seed plants',     scientific: 'Spermatophyta',age: 360, note: 'reproduction without standing water' },
+  flow: { name: 'Flowering plants',scientific: 'Angiospermae', age: 140, note: 'evolved alongside the dinosaurs' },
+};
+
+// type → which universal anchors apply (oldest first when listed)
+const TYPE_ANCHORS = {
+  bryophyte:  ['land'],
+  lycophyte:  ['land', 'vasc'],
+  fern:       ['land', 'vasc'],
+  gymnosperm: ['land', 'vasc', 'seed'],
+  angiosperm: ['land', 'vasc', 'seed', 'flow'],
+};
+
+// ============================================================
+// Family-level lineage data
+// Sources: TimeTree.org, Magallón et al. 2015, Smith & Brown 2018, OneZoom.
+// ============================================================
+const FAMILY_DATA = {
+  // --- Mosses ---
+  'Polytrichaceae':   { age: 290, type: 'bryophyte',  order: 'Polytrichales',  order_age: 280, common: 'haircap mosses' },
+  'Sphagnaceae':      { age: 320, type: 'bryophyte',  order: 'Sphagnales',     order_age: 320, common: 'peat mosses' },
+  'Bryaceae':         { age: 250, type: 'bryophyte',  order: 'Bryales',        order_age: 250, common: 'true mosses' },
+  'Mniaceae':         { age: 200, type: 'bryophyte',  order: 'Bryales',        order_age: 250, common: 'mnium mosses' },
+
+  // --- Lycophytes ---
+  'Lycopodiaceae':    { age: 380, type: 'lycophyte',  order: 'Lycopodiales',   order_age: 380, common: 'clubmosses' },
+  'Selaginellaceae':  { age: 330, type: 'lycophyte',  order: 'Selaginellales', order_age: 330, common: 'spike-mosses' },
+  'Isoetaceae':       { age: 250, type: 'lycophyte',  order: 'Isoetales',      order_age: 350, common: 'quillworts' },
+
+  // --- Ferns & horsetails ---
+  'Equisetaceae':     { age: 150, type: 'fern',       order: 'Equisetales',    order_age: 360, common: 'horsetails' },
+  'Osmundaceae':      { age: 220, type: 'fern',       order: 'Osmundales',     order_age: 290, common: 'royal ferns' },
+  'Cyatheaceae':      { age: 220, type: 'fern',       order: 'Cyatheales',     order_age: 220, common: 'tree ferns' },
+  'Dicksoniaceae':    { age: 200, type: 'fern',       order: 'Cyatheales',     order_age: 220, common: 'tree ferns' },
+  'Dennstaedtiaceae': { age: 130, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'bracken ferns' },
+  'Polypodiaceae':    { age: 100, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'true ferns' },
+  'Pteridaceae':      { age: 100, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'maidenhair ferns' },
+  'Aspleniaceae':     { age:  80, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'spleenworts' },
+  'Dryopteridaceae':  { age:  60, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'wood ferns' },
+  'Athyriaceae':      { age:  50, type: 'fern',       order: 'Polypodiales',   order_age: 200, common: 'lady ferns' },
+
+  // --- Gymnosperms ---
+  'Ginkgoaceae':      { age: 270, type: 'gymnosperm', order: 'Ginkgoales',     order_age: 270, common: 'ginkgo' },
+  'Cycadaceae':       { age: 280, type: 'gymnosperm', order: 'Cycadales',      order_age: 280, common: 'cycads' },
+  'Zamiaceae':        { age: 270, type: 'gymnosperm', order: 'Cycadales',      order_age: 280, common: 'cycads' },
+  'Pinaceae':         { age: 150, type: 'gymnosperm', order: 'Pinales',        order_age: 300, common: 'pines, firs, spruces' },
+  'Cupressaceae':     { age: 210, type: 'gymnosperm', order: 'Cupressales',    order_age: 230, common: 'cypresses, redwoods' },
+  'Taxaceae':         { age: 200, type: 'gymnosperm', order: 'Cupressales',    order_age: 230, common: 'yews' },
+  'Araucariaceae':    { age: 220, type: 'gymnosperm', order: 'Araucariales',   order_age: 240, common: 'monkey puzzles' },
+  'Podocarpaceae':    { age: 200, type: 'gymnosperm', order: 'Araucariales',   order_age: 240, common: 'podocarps' },
+  'Sciadopityaceae':  { age: 230, type: 'gymnosperm', order: 'Cupressales',    order_age: 230, common: 'umbrella pine' },
+  'Gnetaceae':        { age: 150, type: 'gymnosperm', order: 'Gnetales',       order_age: 200, common: 'jointfirs' },
+  'Ephedraceae':      { age: 120, type: 'gymnosperm', order: 'Gnetales',       order_age: 200, common: 'ephedras' },
+  'Welwitschiaceae':  { age: 150, type: 'gymnosperm', order: 'Gnetales',       order_age: 200, common: 'welwitschia' },
+
+  // --- Magnoliids ---
+  'Magnoliaceae':     { age:  95, type: 'angiosperm', order: 'Magnoliales',    order_age: 110, common: 'magnolias' },
+  'Annonaceae':       { age: 100, type: 'angiosperm', order: 'Magnoliales',    order_age: 110, common: 'custard apples' },
+  'Lauraceae':        { age: 110, type: 'angiosperm', order: 'Laurales',       order_age: 115, common: 'laurels, avocado, cinnamon' },
+  'Calycanthaceae':   { age:  90, type: 'angiosperm', order: 'Laurales',       order_age: 115, common: 'sweetshrubs' },
+  'Nymphaeaceae':     { age: 135, type: 'angiosperm', order: 'Nymphaeales',    order_age: 135, common: 'water lilies' },
+  'Piperaceae':       { age: 110, type: 'angiosperm', order: 'Piperales',      order_age: 115, common: 'peppers' },
+
+  // --- Monocots ---
+  'Poaceae':          { age:  70, type: 'angiosperm', order: 'Poales',         order_age:  90, common: 'grasses, bamboo, wheat' },
+  'Cyperaceae':       { age:  70, type: 'angiosperm', order: 'Poales',         order_age:  90, common: 'sedges' },
+  'Bromeliaceae':     { age:  60, type: 'angiosperm', order: 'Poales',         order_age:  90, common: 'pineapple, bromeliads' },
+  'Typhaceae':        { age:  70, type: 'angiosperm', order: 'Poales',         order_age:  90, common: 'cattails' },
+  'Juncaceae':        { age:  70, type: 'angiosperm', order: 'Poales',         order_age:  90, common: 'rushes' },
+  'Liliaceae':        { age:  80, type: 'angiosperm', order: 'Liliales',       order_age: 110, common: 'lilies, tulips' },
+  'Smilacaceae':      { age:  70, type: 'angiosperm', order: 'Liliales',       order_age: 110, common: 'greenbriers' },
+  'Iridaceae':        { age:  80, type: 'angiosperm', order: 'Asparagales',    order_age: 110, common: 'irises' },
+  'Orchidaceae':      { age:  80, type: 'angiosperm', order: 'Asparagales',    order_age: 110, common: 'orchids' },
+  'Asparagaceae':     { age:  65, type: 'angiosperm', order: 'Asparagales',    order_age: 110, common: 'asparagus, hostas, agaves' },
+  'Asphodelaceae':    { age:  65, type: 'angiosperm', order: 'Asparagales',    order_age: 110, common: 'aloes, daylilies' },
+  'Amaryllidaceae':   { age:  65, type: 'angiosperm', order: 'Asparagales',    order_age: 110, common: 'onions, daffodils' },
+  'Arecaceae':        { age:  90, type: 'angiosperm', order: 'Arecales',       order_age: 100, common: 'palms' },
+  'Musaceae':         { age:  60, type: 'angiosperm', order: 'Zingiberales',   order_age:  80, common: 'bananas' },
+  'Zingiberaceae':    { age:  60, type: 'angiosperm', order: 'Zingiberales',   order_age:  80, common: 'gingers' },
+  'Cannaceae':        { age:  50, type: 'angiosperm', order: 'Zingiberales',   order_age:  80, common: 'cannas' },
+  'Strelitziaceae':   { age:  60, type: 'angiosperm', order: 'Zingiberales',   order_age:  80, common: 'birds-of-paradise' },
+  'Heliconiaceae':    { age:  55, type: 'angiosperm', order: 'Zingiberales',   order_age:  80, common: 'heliconias' },
+  'Araceae':          { age:  90, type: 'angiosperm', order: 'Alismatales',    order_age: 105, common: 'aroids, philodendrons' },
+  'Pandanaceae':      { age:  70, type: 'angiosperm', order: 'Pandanales',     order_age:  90, common: 'screw pines' },
+  'Alismataceae':     { age:  80, type: 'angiosperm', order: 'Alismatales',    order_age: 105, common: 'water plantains' },
+
+  // --- Eudicot trees ---
+  'Fagaceae':         { age:  70, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'oaks, beeches, chestnuts' },
+  'Betulaceae':       { age:  80, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'birches, alders, hazels' },
+  'Juglandaceae':     { age:  65, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'walnuts, hickories' },
+  'Myricaceae':       { age:  85, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'bayberries' },
+  'Casuarinaceae':    { age:  80, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'she-oaks' },
+  'Nothofagaceae':    { age:  85, type: 'angiosperm', order: 'Fagales',        order_age:  95, common: 'southern beeches' },
+  'Salicaceae':       { age:  65, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'willows, poplars, aspens' },
+  'Ulmaceae':         { age:  80, type: 'angiosperm', order: 'Rosales',        order_age: 110, common: 'elms' },
+  'Cannabaceae':      { age:  70, type: 'angiosperm', order: 'Rosales',        order_age: 110, common: 'hops, hemp, hackberries' },
+  'Moraceae':         { age:  70, type: 'angiosperm', order: 'Rosales',        order_age: 110, common: 'figs, mulberries' },
+  'Urticaceae':       { age:  60, type: 'angiosperm', order: 'Rosales',        order_age: 110, common: 'nettles' },
+  'Platanaceae':      { age: 100, type: 'angiosperm', order: 'Proteales',      order_age: 120, common: 'plane trees, sycamores' },
+  'Proteaceae':       { age: 110, type: 'angiosperm', order: 'Proteales',      order_age: 120, common: 'proteas, banksias' },
+  'Sapindaceae':      { age:  65, type: 'angiosperm', order: 'Sapindales',     order_age:  80, common: 'maples, horse chestnuts' },
+  'Anacardiaceae':    { age:  65, type: 'angiosperm', order: 'Sapindales',     order_age:  80, common: 'cashews, mangos, sumacs' },
+  'Meliaceae':        { age:  70, type: 'angiosperm', order: 'Sapindales',     order_age:  80, common: 'mahoganies, neems' },
+  'Rutaceae':         { age:  70, type: 'angiosperm', order: 'Sapindales',     order_age:  80, common: 'citrus, rues' },
+  'Simaroubaceae':    { age:  75, type: 'angiosperm', order: 'Sapindales',     order_age:  80, common: 'tree-of-heaven' },
+  'Oleaceae':         { age:  55, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'olives, ashes, lilacs' },
+  'Cornaceae':        { age:  80, type: 'angiosperm', order: 'Cornales',       order_age: 100, common: 'dogwoods' },
+  'Hydrangeaceae':    { age:  90, type: 'angiosperm', order: 'Cornales',       order_age: 100, common: 'hydrangeas' },
+  'Aquifoliaceae':    { age:  80, type: 'angiosperm', order: 'Aquifoliales',   order_age:  90, common: 'hollies' },
+  'Hamamelidaceae':   { age:  80, type: 'angiosperm', order: 'Saxifragales',   order_age: 120, common: 'witch hazels' },
+
+  // --- Eudicot shrubs / herbs ---
+  'Rosaceae':         { age:  85, type: 'angiosperm', order: 'Rosales',        order_age: 110, common: 'roses, apples, cherries' },
+  'Fabaceae':         { age:  70, type: 'angiosperm', order: 'Fabales',        order_age:  90, common: 'legumes, peas, beans' },
+  'Asteraceae':       { age:  50, type: 'angiosperm', order: 'Asterales',      order_age:  70, common: 'daisies, sunflowers' },
+  'Campanulaceae':    { age:  55, type: 'angiosperm', order: 'Asterales',      order_age:  70, common: 'bellflowers' },
+  'Lamiaceae':        { age:  55, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'mints, sages, lavenders' },
+  'Plantaginaceae':   { age:  65, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'plantains, snapdragons' },
+  'Scrophulariaceae': { age:  60, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'figworts' },
+  'Verbenaceae':      { age:  55, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'verbenas, lantanas' },
+  'Bignoniaceae':     { age:  55, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'jacarandas, catalpas' },
+  'Acanthaceae':      { age:  55, type: 'angiosperm', order: 'Lamiales',       order_age:  80, common: 'acanthuses' },
+  'Brassicaceae':     { age:  50, type: 'angiosperm', order: 'Brassicales',    order_age:  90, common: 'mustards, cabbages' },
+  'Solanaceae':       { age:  55, type: 'angiosperm', order: 'Solanales',      order_age:  80, common: 'nightshades, tomatoes, potatoes' },
+  'Convolvulaceae':   { age:  60, type: 'angiosperm', order: 'Solanales',      order_age:  80, common: 'morning glories' },
+  'Apiaceae':         { age:  60, type: 'angiosperm', order: 'Apiales',        order_age:  90, common: 'carrots, parsleys' },
+  'Araliaceae':       { age:  70, type: 'angiosperm', order: 'Apiales',        order_age:  90, common: 'ivies, ginsengs' },
+  'Ericaceae':        { age:  90, type: 'angiosperm', order: 'Ericales',       order_age: 110, common: 'heathers, blueberries, rhododendrons' },
+  'Primulaceae':      { age:  75, type: 'angiosperm', order: 'Ericales',       order_age: 110, common: 'primroses' },
+  'Theaceae':         { age:  80, type: 'angiosperm', order: 'Ericales',       order_age: 110, common: 'tea, camellias' },
+  'Sapotaceae':       { age:  80, type: 'angiosperm', order: 'Ericales',       order_age: 110, common: 'sapodillas' },
+  'Ebenaceae':        { age:  80, type: 'angiosperm', order: 'Ericales',       order_age: 110, common: 'persimmons, ebonies' },
+  'Ranunculaceae':    { age: 100, type: 'angiosperm', order: 'Ranunculales',   order_age: 130, common: 'buttercups, anemones' },
+  'Berberidaceae':    { age: 100, type: 'angiosperm', order: 'Ranunculales',   order_age: 130, common: 'barberries' },
+  'Papaveraceae':     { age:  90, type: 'angiosperm', order: 'Ranunculales',   order_age: 130, common: 'poppies' },
+  'Caryophyllaceae':  { age:  70, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'pinks, carnations' },
+  'Polygonaceae':     { age:  70, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'knotweeds, buckwheats' },
+  'Amaranthaceae':    { age:  65, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'amaranths, beets, spinach' },
+  'Cactaceae':        { age:  35, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'cacti' },
+  'Portulacaceae':    { age:  50, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'purslanes' },
+  'Nyctaginaceae':    { age:  65, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'four-o-clocks' },
+  'Droseraceae':      { age:  95, type: 'angiosperm', order: 'Caryophyllales', order_age:  90, common: 'sundews' },
+  'Geraniaceae':      { age:  65, type: 'angiosperm', order: 'Geraniales',     order_age:  75, common: 'geraniums' },
+  'Malvaceae':        { age:  70, type: 'angiosperm', order: 'Malvales',       order_age:  85, common: 'mallows, hibiscus, lindens, cotton' },
+  'Violaceae':        { age:  75, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'violets, pansies' },
+  'Euphorbiaceae':    { age:  85, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'spurges, poinsettias' },
+  'Hypericaceae':     { age:  70, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'st johns worts' },
+  'Passifloraceae':   { age:  70, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'passion flowers' },
+  'Linaceae':         { age:  80, type: 'angiosperm', order: 'Malpighiales',   order_age: 100, common: 'flax' },
+  'Onagraceae':       { age:  70, type: 'angiosperm', order: 'Myrtales',       order_age:  90, common: 'evening primroses, fireweeds' },
+  'Myrtaceae':        { age:  60, type: 'angiosperm', order: 'Myrtales',       order_age:  90, common: 'myrtles, eucalypts, cloves' },
+  'Lythraceae':       { age:  70, type: 'angiosperm', order: 'Myrtales',       order_age:  90, common: 'crape myrtles, pomegranates' },
+  'Rubiaceae':        { age:  80, type: 'angiosperm', order: 'Gentianales',    order_age:  90, common: 'coffee, gardenias, madders' },
+  'Apocynaceae':      { age:  70, type: 'angiosperm', order: 'Gentianales',    order_age:  90, common: 'milkweeds, periwinkles' },
+  'Gentianaceae':     { age:  75, type: 'angiosperm', order: 'Gentianales',    order_age:  90, common: 'gentians' },
+  'Boraginaceae':     { age:  75, type: 'angiosperm', order: 'Boraginales',    order_age:  85, common: 'forget-me-nots, comfreys' },
+  'Caprifoliaceae':   { age:  60, type: 'angiosperm', order: 'Dipsacales',     order_age:  85, common: 'honeysuckles' },
+  'Adoxaceae':        { age:  60, type: 'angiosperm', order: 'Dipsacales',     order_age:  85, common: 'elderberries, viburnums' },
+  'Cucurbitaceae':    { age:  80, type: 'angiosperm', order: 'Cucurbitales',   order_age:  90, common: 'gourds, melons' },
+  'Begoniaceae':      { age:  70, type: 'angiosperm', order: 'Cucurbitales',   order_age:  90, common: 'begonias' },
+  'Crassulaceae':     { age:  75, type: 'angiosperm', order: 'Saxifragales',   order_age: 120, common: 'stonecrops, jade plants' },
+  'Saxifragaceae':    { age:  90, type: 'angiosperm', order: 'Saxifragales',   order_age: 120, common: 'saxifrages' },
+  'Grossulariaceae':  { age:  85, type: 'angiosperm', order: 'Saxifragales',   order_age: 120, common: 'currants, gooseberries' },
+};
+
+// Common-name aliases the user might encounter
+const ALIASES = {
+  'Compositae': 'Asteraceae', 'Leguminosae': 'Fabaceae', 'Cruciferae': 'Brassicaceae',
+  'Umbelliferae': 'Apiaceae', 'Labiatae': 'Lamiaceae', 'Gramineae': 'Poaceae',
+  'Palmae': 'Arecaceae', 'Guttiferae': 'Clusiaceae',
+};
+
+// Genus-level rough ages (Myr) for famous taxa.
+const GENUS_AGES = {
+  'Ginkgo': 200, 'Pinus': 130, 'Picea': 100, 'Abies': 80, 'Sequoia': 100,
+  'Sequoiadendron': 60, 'Taxus': 80, 'Quercus': 55, 'Fagus': 50, 'Castanea': 50,
+  'Betula': 60, 'Alnus': 60, 'Corylus': 50, 'Salix': 30, 'Populus': 60,
+  'Acer': 60, 'Aesculus': 50, 'Magnolia': 80, 'Liriodendron': 95, 'Tilia': 65,
+  'Platanus': 100, 'Ulmus': 80, 'Prunus': 60, 'Malus': 50, 'Pyrus': 50,
+  'Rosa': 50, 'Bellis': 5, 'Helianthus': 10, 'Taraxacum': 15, 'Lolium': 7,
+  'Triticum': 5, 'Oryza': 15, 'Bambusa': 30, 'Polypodium': 50, 'Pteridium': 60,
+  'Polytrichum': 40, 'Sphagnum': 100, 'Quercus robur': 7,
+};
+
+// ============================================================
+// State
+// ============================================================
+const state = {
+  apiKey: '',
+  photo: null,         // HTMLImageElement
+  busy: false,
+};
+
+// ============================================================
+// API key persistence
+// ============================================================
+const KEY_STORAGE = 'phyloage.plantnet.key';
+
+function loadApiKey() {
+  state.apiKey = localStorage.getItem(KEY_STORAGE) || '';
+  document.getElementById('api-key').value = state.apiKey;
+  updateKeyStatus();
+}
+
+function saveApiKey(value) {
+  state.apiKey = (value || '').trim();
+  if (state.apiKey) localStorage.setItem(KEY_STORAGE, state.apiKey);
+  else localStorage.removeItem(KEY_STORAGE);
+  updateKeyStatus();
+}
+
+function updateKeyStatus() {
+  const status = document.getElementById('key-status');
+  const text = document.getElementById('key-status-text');
+  const summary = document.getElementById('key-summary');
+  if (state.apiKey) {
+    status.classList.add('ok');
+    text.textContent = 'Key set — ready to identify';
+    summary.textContent = 'Pl@ntNet API key — set';
+  } else {
+    status.classList.remove('ok');
+    text.textContent = 'No key set';
+    summary.textContent = 'Pl@ntNet API key — required for identification';
+  }
+}
+
+// ============================================================
+// Identification (Pl@ntNet)
+// ============================================================
+async function identifyPhoto(blob) {
+  if (!state.apiKey) throw new Error('No API key set. Open the settings panel and paste your Pl@ntNet key.');
+
+  const fd = new FormData();
+  fd.append('images', blob, 'photo.jpg');
+  fd.append('organs', 'auto');
+
+  const url = 'https://my-api.plantnet.org/v2/identify/all'
+    + '?api-key=' + encodeURIComponent(state.apiKey)
+    + '&include-related-images=false&no-reject=false&lang=en';
+
+  const res = await fetch(url, { method: 'POST', body: fd });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    let msg = 'HTTP ' + res.status;
+    if (res.status === 401 || res.status === 403) msg = 'Pl@ntNet rejected the API key.';
+    else if (res.status === 429) msg = 'Pl@ntNet daily quota exhausted.';
+    else if (txt) msg += ': ' + txt.slice(0, 100);
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  if (!data.results || !data.results.length) {
+    throw new Error("Couldn't identify this photo — try a tighter shot of the leaves or flower.");
+  }
+  const top = data.results[0];
+  return {
+    family:  top.species.family.scientificNameWithoutAuthor,
+    genus:   top.species.genus.scientificNameWithoutAuthor,
+    species: top.species.scientificNameWithoutAuthor,
+    common:  (top.species.commonNames && top.species.commonNames[0]) || null,
+    confidence: top.score,
+  };
+}
+
+// Resize a photo before upload — saves bandwidth + Pl@ntNet handles 2MB max.
+async function prepareUploadBlob(img) {
+  const max = 1280;
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const s = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * s);
+  c.height = Math.round(h * s);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.86));
+}
+
+// ============================================================
+// Lineage builder
+// ============================================================
+function buildLineage(family, genus, species) {
+  const fam = FAMILY_DATA[ALIASES[family] || family];
+  if (!fam) return null;
+
+  const rows = [];
+
+  // Species (rough — fall back to "modern")
+  const sAge = GENUS_AGES[species] || null;
+  rows.push({
+    rank: 'species',
+    name: species,
+    italic: true,
+    age: sAge,
+    age_label: sAge ? `~${sAge} Myr` : 'modern',
+    epoch: sAge ? epochForAge(sAge) : EPOCHS[0],
+  });
+
+  // Genus
+  const gAge = GENUS_AGES[genus] || Math.round(fam.age * 0.55);
+  rows.push({
+    rank: 'genus',
+    name: genus,
+    italic: true,
+    age: gAge,
+    age_label: `~${gAge} Myr`,
+    epoch: epochForAge(gAge),
+  });
+
+  // Family
+  rows.push({
+    rank: 'family',
+    name: family,
+    common: fam.common,
+    age: fam.age,
+    age_label: `${fam.age} Myr`,
+    epoch: epochForAge(fam.age),
+  });
+
+  // Order
+  rows.push({
+    rank: 'order',
+    name: fam.order,
+    age: fam.order_age,
+    age_label: `${fam.order_age} Myr`,
+    epoch: epochForAge(fam.order_age),
+  });
+
+  // Universal anchors (newer first → older for the timeline ordering)
+  const anchors = TYPE_ANCHORS[fam.type] || ['land'];
+  for (let i = anchors.length - 1; i >= 0; i--) {
+    const a = UNIVERSAL[anchors[i]];
+    rows.push({
+      rank: 'group',
+      name: a.name,
+      sub: a.scientific,
+      age: a.age,
+      age_label: `${a.age} Myr`,
+      epoch: epochForAge(a.age),
+      note: a.note,
+    });
+  }
+
+  // De-duplicate (e.g. order age might match family age)
+  const seen = new Set();
+  return rows.filter(r => {
+    const k = r.name + '|' + r.age;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+// ============================================================
+// Render: identification card + lineage list
+// ============================================================
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderIdentification(id) {
+  document.getElementById('id-card').hidden = false;
+  document.getElementById('id-species').textContent = id.species;
+  document.getElementById('id-common').textContent =
+    id.common ? id.common : `(${id.family} family · ${id.genus})`;
+
+  const conf = document.getElementById('id-confidence');
+  conf.hidden = false;
+  const pct = Math.round((id.confidence || 0) * 100);
+  conf.textContent = `${pct}% match`;
+  conf.classList.toggle('low', pct < 30);
+}
+
+function renderLineage(rows) {
+  document.getElementById('lineage-card').hidden = false;
+  const list = document.getElementById('lineage-list');
+  list.innerHTML = '';
+  for (const r of rows) {
+    const li = document.createElement('li');
+    li.className = 'lineage-row';
+    const nameHTML = r.italic
+      ? `<i>${escapeHTML(r.name)}</i>`
+      : escapeHTML(r.name);
+    const sub = r.common ? `<span class="common">${escapeHTML(r.common)}</span>`
+              : r.sub    ? `<span class="common">(${escapeHTML(r.sub)})</span>`
+              : '';
+    li.innerHTML = `
+      <span class="lineage-swatch" style="background:${r.epoch.color}"></span>
+      <span class="lineage-rank">${r.rank}</span>
+      <span class="lineage-name">${nameHTML}${sub}</span>
+      <span class="lineage-age">${r.age_label}</span>
+    `;
+    list.appendChild(li);
+  }
+}
+
+// ============================================================
+// Render: time axis
+// ============================================================
+const TL = {
+  vbW: 600, vbH: 240,
+  pad: 14,
+  bandY: 28, bandH: 32,
+  axisY: 80,
+};
+
+function ageToX(age) {
+  const span = TL.vbW - TL.pad * 2;
+  const x = TL.pad + span * (1 - age / 600);
+  return Math.max(TL.pad, Math.min(TL.vbW - TL.pad, x));
+}
+
+function renderTimeline(rows) {
+  document.getElementById('timeline-card').hidden = false;
+  const svg = document.getElementById('timeline-svg');
+  svg.innerHTML = '';
+
+  // Pre-Cambrian background (>=600 Myr just on the left edge)
+  const preBg = svgEl('rect', {
+    x: 0, y: TL.bandY, width: TL.pad, height: TL.bandH,
+    fill: '#3a4040'
+  });
+  svg.appendChild(preBg);
+
+  // Era labels (above bands)
+  for (const era of ERAS) {
+    const x1 = ageToX(era.start), x2 = ageToX(era.end);
+    svg.appendChild(svgEl('text', {
+      x: (x1 + x2) / 2, y: TL.bandY - 6,
+      'text-anchor': 'middle', fill: '#abb',
+      'font-size': 10, 'font-weight': 600,
+      'letter-spacing': '0.05em',
+    }, era.name.toUpperCase()));
+  }
+
+  // Period bands
+  for (const ep of EPOCHS) {
+    const x1 = ageToX(ep.start), x2 = ageToX(ep.end);
+    const w = x2 - x1;
+    if (w < 0.5) continue;
+    svg.appendChild(svgEl('rect', {
+      x: x1, y: TL.bandY, width: w, height: TL.bandH,
+      fill: ep.color, opacity: 0.85,
+    }));
+    if (w >= 18) {
+      svg.appendChild(svgEl('text', {
+        x: (x1 + x2) / 2, y: TL.bandY + TL.bandH / 2 + 4,
+        'text-anchor': 'middle', fill: '#1a1a1a',
+        'font-size': 10, 'font-weight': 600,
+      }, ep.short));
+    }
+  }
+
+  // Sort rows oldest first for stacking
+  const sorted = rows
+    .filter(r => r.age != null && r.age <= 600 && r.age > 0)
+    .slice()
+    .sort((a, b) => b.age - a.age);
+
+  // Each row gets its own horizontal lifeline ending at "today" (right edge).
+  const rowH = 22;
+  const startY = TL.axisY + 4;
+  const rightX = ageToX(0);
+
+  sorted.forEach((r, i) => {
+    const y = startY + i * rowH;
+    const xOrigin = ageToX(r.age);
+
+    // Lifeline (origin → today)
+    svg.appendChild(svgEl('line', {
+      x1: xOrigin, y1: y, x2: rightX, y2: y,
+      stroke: r.epoch.color, 'stroke-width': 3, 'stroke-linecap': 'round',
+      opacity: 0.85,
+    }));
+
+    // Origin dot
+    svg.appendChild(svgEl('circle', {
+      cx: xOrigin, cy: y, r: 5,
+      fill: r.epoch.color,
+      stroke: '#0a0e0f', 'stroke-width': 2,
+    }));
+
+    // Label (left of the dot if there's room, else right)
+    const labelText = `${r.name}  ${r.age} Myr`;
+    const placeRight = xOrigin < TL.vbW * 0.45;
+    svg.appendChild(svgEl('text', {
+      x: placeRight ? xOrigin + 10 : xOrigin - 8,
+      y: y + 4,
+      'text-anchor': placeRight ? 'start' : 'end',
+      fill: '#dde', 'font-size': 11,
+    }, labelText));
+  });
+
+  // Total height adjust
+  const totalH = startY + sorted.length * rowH + 10;
+  svg.setAttribute('viewBox', `0 0 ${TL.vbW} ${Math.max(TL.vbH, totalH)}`);
+
+  // "Today" tick at right edge
+  svg.appendChild(svgEl('line', {
+    x1: rightX, y1: TL.bandY - 4, x2: rightX, y2: totalH - 6,
+    stroke: '#67A599', 'stroke-width': 1.5, 'stroke-dasharray': '3 3',
+    opacity: 0.7,
+  }));
+
+  // Callout: highlight the deepest lineage
+  const oldest = sorted[0];
+  if (oldest) {
+    const c = document.getElementById('callout');
+    c.hidden = false;
+    c.innerHTML =
+      `<strong>${escapeHTML(oldest.name)}</strong> emerged about ` +
+      `<strong>${oldest.age} million years ago</strong>` +
+      (oldest.note ? ` — ${escapeHTML(oldest.note)}.` : '.') +
+      ` That's ${formatMultiplier(oldest.age)} the time since the dinosaurs went extinct.`;
+  }
+}
+
+function formatMultiplier(age) {
+  const ratio = age / 66;       // K-Pg extinction = 66 Myr
+  if (ratio < 1.05) return 'about';
+  if (ratio < 1.6)  return Math.round(ratio * 10) / 10 + '× ';
+  return Math.round(ratio) + '× ';
+}
+
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (text != null) el.textContent = text;
+  return el;
+}
+
+// ============================================================
+// Status helpers
+// ============================================================
+function setStatus(msg, busy = false, error = false) {
+  const el = document.getElementById('status');
+  el.innerHTML = '';
+  el.classList.toggle('error', !!error);
+  if (busy) {
+    const sp = document.createElement('span');
+    sp.className = 'spinner';
+    el.appendChild(sp);
+  }
+  if (msg) el.appendChild(document.createTextNode(msg));
+}
+
+// ============================================================
+// Pipeline
+// ============================================================
+async function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    setStatus('Please choose an image file.', false, true);
+    return;
+  }
+  if (state.busy) return;
+  state.busy = true;
+
+  document.getElementById('upload-step').hidden = true;
+  document.getElementById('result-step').hidden = false;
+  document.getElementById('id-card').hidden = true;
+  document.getElementById('lineage-card').hidden = true;
+  document.getElementById('timeline-card').hidden = true;
+  document.getElementById('callout').hidden = true;
+
+  // Show photo
+  const photoEl = document.getElementById('photo');
+  const url = URL.createObjectURL(file);
+  photoEl.src = url;
+  await new Promise(r => { photoEl.onload = r; });
+
+  state.photo = photoEl;
+
+  if (!state.apiKey) {
+    setStatus('Set a Pl@ntNet API key first (settings above).', false, true);
+    state.busy = false;
+    return;
+  }
+
+  setStatus('Identifying…', true);
+  try {
+    const blob = await prepareUploadBlob(photoEl);
+    const id = await identifyPhoto(blob);
+    setStatus('');
+    renderIdentification(id);
+
+    const fam = ALIASES[id.family] || id.family;
+    const lineage = buildLineage(fam, id.genus, id.species);
+    if (!lineage) {
+      setStatus(
+        `Identified as ${id.species} (${id.family}) — but ${id.family} isn't ` +
+        `in the lineage database yet.`,
+        false, true
+      );
+    } else {
+      renderLineage(lineage);
+      renderTimeline(lineage);
+    }
+  } catch (e) {
+    setStatus(e.message, false, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+function reset() {
+  document.getElementById('upload-step').hidden = false;
+  document.getElementById('result-step').hidden = true;
+  document.getElementById('file-input').value = '';
+  setStatus('');
+}
+
+// ============================================================
+// Init
+// ============================================================
+loadApiKey();
+
+document.getElementById('file-input').addEventListener('change', ev => {
+  if (ev.target.files[0]) handleFile(ev.target.files[0]);
+});
+document.getElementById('reset-btn').addEventListener('click', reset);
+document.getElementById('api-key').addEventListener('input', ev => saveApiKey(ev.target.value));
+document.getElementById('api-key').addEventListener('change', ev => saveApiKey(ev.target.value));
+
+// Open the key panel automatically if no key is set
+if (!state.apiKey) document.getElementById('key-details').open = true;
+
+// Allow upload zone to respond to keyboard (Enter/Space)
+document.querySelector('.upload-zone').addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' || ev.key === ' ') {
+    ev.preventDefault();
+    document.getElementById('file-input').click();
+  }
+});
+</script>
+</body>
+</html>
