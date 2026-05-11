@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e0f">
+<meta name="description" content="Find out how old the rock under your feet is. Location-based bedrock lookup plus optional AI photo identification, plotted on Earth's 4.5-billion-year timeline.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<title>Geo-Age</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0a0e0f;
+    color: #e8eaed;
+    min-height: 100vh;
+    line-height: 1.45;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  main {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 14px 40px;
+  }
+  header {
+    text-align: center;
+    margin: 8px 0 18px;
+  }
+  header h1 {
+    font-size: 1.7rem; font-weight: 300; letter-spacing: -0.02em;
+    background: linear-gradient(90deg, #A1887F, #FB8072, #F0027F, #A6027A);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+  }
+  header p { color: #99a; margin-top: 4px; font-size: 0.92rem; }
+  .nav {
+    margin-top: 10px; font-size: 0.85rem; color: #788;
+  }
+  .nav a {
+    color: #67A599; text-decoration: none;
+    padding: 4px 8px; border: 1px solid #2c3434; border-radius: 999px;
+  }
+  .nav a:hover { background: #161d1d; }
+
+  .card {
+    background: #131818;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 1.05rem; font-weight: 500; margin-bottom: 10px; color: #ddd; }
+  .card h3 { font-size: 0.92rem; font-weight: 500; margin-bottom: 8px; color: #aab; letter-spacing: 0.02em; }
+
+  /* --- Action buttons (two big options) --- */
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .action-btn {
+    background: #131818;
+    border: 2px dashed #2c3434;
+    border-radius: 14px;
+    padding: 20px 12px 18px;
+    text-align: center;
+    cursor: pointer;
+    color: #cde;
+    transition: all 0.15s;
+    font-family: inherit;
+    font-size: 0.9rem;
+  }
+  .action-btn:hover, .action-btn:focus-visible {
+    border-color: #FB8072; background: #161d1d; outline: none;
+  }
+  .action-btn svg { width: 30px; height: 30px; opacity: 0.7; margin-bottom: 6px; }
+  .action-btn strong { display: block; color: #fff; font-weight: 500; margin-bottom: 2px; }
+  .action-btn span { font-size: 0.78rem; color: #99a; }
+  input[type="file"] { display: none; }
+
+  /* --- API key setup --- */
+  details.key-setup { margin-bottom: 14px; }
+  details.key-setup summary {
+    cursor: pointer; padding: 10px 14px; border-radius: 10px;
+    background: #1a2020; color: #cde; font-size: 0.85rem;
+    list-style: none;
+  }
+  details.key-setup summary::-webkit-details-marker { display: none; }
+  details.key-setup summary::before {
+    content: '⚙'; margin-right: 6px; opacity: 0.7;
+  }
+  details.key-setup[open] summary {
+    border-radius: 10px 10px 0 0;
+    background: #1f2727;
+  }
+  .key-body {
+    background: #1a2020;
+    padding: 12px 14px 14px;
+    border-radius: 0 0 10px 10px;
+    font-size: 0.85rem;
+    color: #abb;
+  }
+  .key-body input[type="password"] {
+    width: 100%;
+    background: #0e1212; color: #fff;
+    border: 1px solid #2c3434;
+    padding: 9px 12px; border-radius: 8px;
+    font-size: 14px; font-family: ui-monospace, monospace;
+    margin-top: 8px;
+  }
+  .key-body input[type="password"]:focus { outline: 2px solid #FB8072; outline-offset: -1px; }
+  .key-body a { color: #FB8072; }
+  .key-status {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 8px; font-size: 0.8rem;
+  }
+  .key-status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #f04028;
+  }
+  .key-status.ok .dot { background: #7fc64e; }
+
+  /* --- Photo --- */
+  .photo-card { padding: 0; overflow: hidden; }
+  .photo-card img {
+    width: 100%; height: auto;
+    display: block;
+    max-height: 360px;
+    object-fit: cover;
+  }
+
+  /* --- Status --- */
+  #status {
+    color: #abb; font-size: 0.88rem;
+    padding: 6px 4px; min-height: 22px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #status.error { color: #ff8c7a; }
+  .spinner {
+    width: 14px; height: 14px;
+    border: 2px solid #2c3434; border-top-color: #FB8072;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- Result cards --- */
+  .formation-name {
+    font-size: 1.25rem; font-weight: 500;
+    color: #fff; line-height: 1.25;
+  }
+  .formation-sub { color: #abb; font-size: 0.9rem; margin-top: 4px; }
+  .formation-lith {
+    margin-top: 8px;
+    display: inline-block;
+    padding: 3px 10px; border-radius: 99px;
+    font-size: 0.78rem; font-weight: 500;
+    background: rgba(251,128,114,0.13); color: #fbac9f;
+  }
+  .formation-age {
+    margin-top: 10px;
+    font-variant-numeric: tabular-nums;
+    color: #cde;
+  }
+  .formation-age strong {
+    color: #fff; font-weight: 600; font-size: 1.15rem;
+  }
+  .formation-desc {
+    margin-top: 10px;
+    font-size: 0.85rem; color: #99a;
+    line-height: 1.55;
+  }
+
+  .id-rock {
+    font-size: 1.15rem; font-weight: 500; color: #fff;
+  }
+  .id-category {
+    margin-top: 6px;
+    display: inline-block;
+    padding: 3px 10px; border-radius: 99px;
+    font-size: 0.78rem; font-weight: 500;
+    background: rgba(127,198,78,0.13); color: #9bdc6f;
+  }
+  .id-category.igneous     { background: rgba(240,64,40,0.15);  color: #ffa094; }
+  .id-category.sedimentary { background: rgba(251,128,114,0.15); color: #fbc28a; }
+  .id-category.metamorphic { background: rgba(127,128,205,0.15); color: #a1a8d7; }
+  .id-reasoning { margin-top: 8px; color: #99a; font-size: 0.85rem; font-style: italic; }
+
+  /* --- Timeline --- */
+  .timeline-card { padding: 14px 12px 16px; }
+  .timeline-svg { display: block; width: 100%; height: auto; }
+  .timeline-axis-labels {
+    display: flex; justify-content: space-between;
+    color: #788; font-size: 0.72rem;
+    margin: 4px 4px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .callout {
+    background: rgba(251,128,114,0.07);
+    border-left: 3px solid #FB8072;
+    padding: 10px 12px;
+    margin-top: 12px;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.87rem; color: #cde;
+    line-height: 1.55;
+  }
+  .callout strong { color: #fff; font-weight: 500; }
+
+  /* --- Buttons --- */
+  .btn {
+    width: 100%;
+    border: none;
+    background: #FB8072; color: #0a0e0f;
+    padding: 13px 18px;
+    border-radius: 10px;
+    font-size: 0.95rem; font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+    font-family: inherit;
+    transition: filter 0.15s;
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.secondary { background: #1f2727; color: #cde; }
+  .btn.secondary:hover { background: #283131; }
+
+  [hidden] { display: none !important; }
+  .footnote {
+    text-align: center;
+    color: #566;
+    font-size: 0.74rem;
+    margin-top: 24px;
+    line-height: 1.6;
+  }
+  .footnote a { color: #788; }
+
+  @media (min-width: 700px) {
+    main { max-width: 560px; padding: 24px 18px 60px; }
+    header h1 { font-size: 2.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<main>
+
+<header>
+  <h1>Geo-Age</h1>
+  <p>How old is the rock beneath your feet?</p>
+  <div class="nav"><a href="index.html">→ plants version (Phylo-Age)</a></div>
+</header>
+
+<!-- ============ Setup step ============ -->
+<section id="setup-step">
+
+  <div class="actions">
+    <button class="action-btn" id="loc-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s-7-8-7-13a7 7 0 1 1 14 0c0 5-7 13-7 13z"/>
+        <circle cx="12" cy="9" r="2.5"/>
+      </svg>
+      <strong>Use my location</strong>
+      <span>look up bedrock at your GPS</span>
+    </button>
+
+    <label class="action-btn" for="file-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="6" width="18" height="14" rx="2"/>
+        <circle cx="12" cy="13" r="4"/>
+        <path d="M9 6l1.5-2h3L15 6"/>
+      </svg>
+      <strong>Photo of a rock</strong>
+      <span>identify by AI vision</span>
+    </label>
+    <input type="file" id="file-input" accept="image/*" capture="environment">
+  </div>
+
+  <details class="key-setup" id="key-details">
+    <summary id="key-summary">Anthropic API key — needed for photo identification</summary>
+    <div class="key-body">
+      Rock identification uses Claude vision. Get a key at
+      <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>
+      and paste it below. Stored only in your browser. Each photo costs roughly $0.01.
+      The location lookup works without a key.
+      <input type="password" id="api-key" autocomplete="off" placeholder="sk-ant-… (your Anthropic key)" spellcheck="false">
+      <div class="key-status" id="key-status"><span class="dot"></span><span id="key-status-text">No key set</span></div>
+    </div>
+  </details>
+
+</section>
+
+<!-- ============ Result step ============ -->
+<section id="result-step" hidden>
+
+  <div id="status"></div>
+
+  <div class="card photo-card" id="photo-card" hidden>
+    <img id="photo" alt="Your rock photo">
+  </div>
+
+  <div class="card" id="id-card" hidden>
+    <h3>Photo identification (Claude vision)</h3>
+    <div class="id-rock" id="id-rock"></div>
+    <span class="id-category" id="id-category"></span>
+    <div class="formation-age" id="id-age" hidden></div>
+    <div class="id-reasoning" id="id-reasoning"></div>
+  </div>
+
+  <div class="card" id="bedrock-card" hidden>
+    <h3>Bedrock at this location (Macrostrat)</h3>
+    <div class="formation-name" id="bedrock-name"></div>
+    <div class="formation-sub" id="bedrock-period"></div>
+    <span class="formation-lith" id="bedrock-lith"></span>
+    <div class="formation-age" id="bedrock-age"></div>
+    <div class="formation-desc" id="bedrock-desc"></div>
+  </div>
+
+  <div class="card timeline-card" id="timeline-card" hidden>
+    <h2>On Earth's timeline (log scale, 4.5 Gyr → today)</h2>
+    <svg class="timeline-svg" id="timeline-svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="timeline-axis-labels">
+      <span>4.5 Gyr ago (Earth forms)</span>
+      <span>today</span>
+    </div>
+    <div class="callout" id="callout" hidden></div>
+  </div>
+
+  <button class="btn secondary" id="reset-btn">Start over</button>
+</section>
+
+<p class="footnote">
+  Bedrock data from <a href="https://macrostrat.org/" target="_blank" rel="noopener">Macrostrat</a> (CC-BY) ·
+  Photo ID by <a href="https://www.anthropic.com/" target="_blank" rel="noopener">Claude</a> (Anthropic) ·
+  Geological time scale: ICS v2023
+</p>
+
+</main>
+
+<script>
+'use strict';
+
+// ============================================================
+// Eons & geological time
+// ============================================================
+const EONS = [
+  { name: 'Hadean',      start: 4567, end: 4000, color: '#5C2D2D', short: 'Had' },
+  { name: 'Archean',     start: 4000, end: 2500, color: '#A6027A', short: 'Arc' },
+  { name: 'Proterozoic', start: 2500, end:  538, color: '#FB8072', short: 'Prot' },
+  { name: 'Phanerozoic', start:  538, end:    0, color: '#9CCAE0', short: 'Phan' },
+];
+
+const ERAS = [
+  // Within Proterozoic
+  { name: 'Paleoproterozoic', start: 2500, end: 1600, color: '#FB8072' },
+  { name: 'Mesoproterozoic',  start: 1600, end: 1000, color: '#FDBA72' },
+  { name: 'Neoproterozoic',   start: 1000, end:  538, color: '#FFCC99' },
+  // Within Phanerozoic
+  { name: 'Paleozoic',        start:  538, end:  252, color: '#99C5C4' },
+  { name: 'Mesozoic',         start:  252, end:   66, color: '#67C5CA' },
+  { name: 'Cenozoic',         start:   66, end:    0, color: '#F2F91D' },
+];
+
+// ICS period colors (Phanerozoic detail)
+const PERIODS = [
+  { name: 'Cambrian',     start: 538, end: 485, color: '#85B66F' },
+  { name: 'Ordovician',   start: 485, end: 444, color: '#1A9D6F' },
+  { name: 'Silurian',     start: 444, end: 419, color: '#B3E1B6' },
+  { name: 'Devonian',     start: 419, end: 359, color: '#CB8C37' },
+  { name: 'Carboniferous',start: 359, end: 299, color: '#67A599' },
+  { name: 'Permian',      start: 299, end: 252, color: '#F04028' },
+  { name: 'Triassic',     start: 252, end: 201, color: '#812B92' },
+  { name: 'Jurassic',     start: 201, end: 145, color: '#34B2C9' },
+  { name: 'Cretaceous',   start: 145, end:  66, color: '#7FC64E' },
+  { name: 'Paleogene',    start:  66, end:  23, color: '#FD9A52' },
+  { name: 'Neogene',      start:  23, end: 2.6, color: '#FFE619' },
+  { name: 'Quaternary',   start: 2.6, end:   0, color: '#F9F97F' },
+];
+
+function colorForAge(myr) {
+  for (const p of PERIODS) if (myr >= p.end && myr < p.start) return p.color;
+  for (const e of ERAS)    if (myr >= e.end && myr < e.start) return e.color;
+  for (const e of EONS)    if (myr >= e.end && myr < e.start) return e.color;
+  return '#5C2D2D';
+}
+
+// ============================================================
+// Earth-history anchor events (for context on the timeline)
+// ============================================================
+const EARTH_EVENTS = [
+  { age: 4567, label: 'Earth forms' },
+  { age: 4400, label: 'First oceans' },
+  { age: 3500, label: 'Earliest fossil life' },
+  { age: 2400, label: 'Great Oxygenation Event' },
+  { age: 1500, label: 'First multicellular eukaryotes' },
+  { age:  720, label: 'Snowball Earth' },
+  { age:  540, label: 'Cambrian explosion' },
+  { age:  470, label: 'First land plants' },
+  { age:  380, label: 'First forests' },
+  { age:  252, label: 'Permian extinction' },
+  { age:  230, label: 'First dinosaurs' },
+  { age:   66, label: 'K-Pg extinction' },
+  { age:  2.6, label: 'Ice ages begin' },
+  { age:  0.3, label: 'Modern humans' },
+];
+
+// ============================================================
+// State
+// ============================================================
+const KEY_STORAGE = 'geoage.anthropic.key';
+const state = {
+  apiKey: '',
+  busy: false,
+  bedrock: null,    // top Macrostrat unit
+  photoId: null,    // {rock_type, category, age_estimate_myr, ...}
+  location: null,   // {lat, lng}
+  photoDataUrl: null,
+};
+
+// ============================================================
+// API key persistence
+// ============================================================
+function loadApiKey() {
+  state.apiKey = localStorage.getItem(KEY_STORAGE) || '';
+  document.getElementById('api-key').value = state.apiKey;
+  updateKeyStatus();
+}
+function saveApiKey(value) {
+  state.apiKey = (value || '').trim();
+  if (state.apiKey) localStorage.setItem(KEY_STORAGE, state.apiKey);
+  else              localStorage.removeItem(KEY_STORAGE);
+  updateKeyStatus();
+}
+function updateKeyStatus() {
+  const status = document.getElementById('key-status');
+  const text   = document.getElementById('key-status-text');
+  const sum    = document.getElementById('key-summary');
+  if (state.apiKey) {
+    status.classList.add('ok');
+    text.textContent = 'Key set — ready for photo identification';
+    sum.textContent  = 'Anthropic API key — set';
+  } else {
+    status.classList.remove('ok');
+    text.textContent = 'No key set (only needed for photo ID)';
+    sum.textContent  = 'Anthropic API key — needed for photo identification';
+  }
+}
+
+// ============================================================
+// Status / busy
+// ============================================================
+function setStatus(msg, busy = false, error = false) {
+  const el = document.getElementById('status');
+  el.innerHTML = '';
+  el.classList.toggle('error', !!error);
+  if (busy) {
+    const sp = document.createElement('span');
+    sp.className = 'spinner';
+    el.appendChild(sp);
+  }
+  if (msg) el.appendChild(document.createTextNode(msg));
+}
+
+// ============================================================
+// Geolocation
+// ============================================================
+function getLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported by this browser.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      err => {
+        const msg = err.code === 1 ? 'Location permission denied.'
+                  : err.code === 2 ? "Couldn't determine your location."
+                  : err.code === 3 ? 'Location request timed out.'
+                  : err.message || 'Location error.';
+        reject(new Error(msg));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  });
+}
+
+// ============================================================
+// Macrostrat
+// ============================================================
+async function getBedrockAt(lat, lng) {
+  const url = 'https://macrostrat.org/api/v2/geologic_units/map'
+    + `?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&format=json`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Macrostrat HTTP ${res.status}`);
+  const data = await res.json();
+  const units = data && data.success && data.success.data;
+  if (!units || !units.length) {
+    throw new Error('No mapped bedrock at this location. Try opening the map at macrostrat.org/map to see coverage.');
+  }
+  return units[0];
+}
+
+function parseLith(lithString) {
+  if (!lithString) return [];
+  // E.g. "Major:{granofels,quartzite}" or "marl;clay;sand"
+  const m = lithString.match(/\{([^}]+)\}/);
+  if (m) return m[1].split(',').map(s => s.trim());
+  return lithString.split(/[;,]/).map(s => s.trim()).filter(Boolean);
+}
+
+function categoryFromLith(lithList) {
+  const joined = lithList.join(' ').toLowerCase();
+  if (/granite|basalt|gabbro|rhyolite|andesite|diorite|volcanic|igneous|tuff|pluton/.test(joined)) return 'igneous';
+  if (/gneiss|schist|quartzite|slate|marble|granofels|metamorph|amphibolite|migmatite/.test(joined)) return 'metamorphic';
+  if (/sandstone|limestone|shale|mudstone|conglomerate|sedimentary|sand|clay|silt|marl|chalk/.test(joined)) return 'sedimentary';
+  return null;
+}
+
+// ============================================================
+// Claude vision
+// ============================================================
+async function identifyRockPhoto(blob) {
+  if (!state.apiKey) throw new Error('No Anthropic API key. Open settings and paste yours.');
+
+  // Convert blob to base64
+  const base64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onloadend = () => res(r.result.split(',')[1]);
+    r.onerror = () => rej(new Error('Could not read photo.'));
+    r.readAsDataURL(blob);
+  });
+
+  const prompt = `Identify this rock from the photo. Respond with JSON only — no preamble, no markdown fences. Schema:
+{
+  "rock_type": "specific name (e.g. 'pink granite', 'limestone with fossils', 'basalt')",
+  "category": "igneous" | "sedimentary" | "metamorphic",
+  "confidence": 0.0 to 1.0,
+  "age_estimate_myr": { "min": number, "max": number, "best_guess": number },
+  "reasoning": "one sentence on the visual clues that informed the call"
+}
+If you genuinely can't tell, set confidence below 0.3 and give your best guess.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: base64 } },
+          { type: 'text', text: prompt },
+        ],
+      }],
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    let msg = 'Claude HTTP ' + res.status;
+    if (res.status === 401) msg = 'Anthropic rejected the API key.';
+    else if (res.status === 429) msg = 'Anthropic rate limit reached.';
+    else if (txt) msg += ': ' + txt.slice(0, 120);
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  let text = (data.content && data.content[0] && data.content[0].text) || '';
+  // Strip markdown fences if Claude wrapped the JSON anyway
+  text = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error("Claude didn't return clean JSON. Raw: " + text.slice(0, 120));
+  }
+}
+
+// ============================================================
+// Photo handling
+// ============================================================
+async function shrinkBlob(file, maxDim = 1280) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width  = Math.round(img.naturalWidth  * s);
+      c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => res({ blob: b, dataUrl: c.toDataURL('image/jpeg', 0.86) }), 'image/jpeg', 0.86);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Image failed to load.')); };
+    img.src = url;
+  });
+}
+
+// ============================================================
+// Render: bedrock card
+// ============================================================
+function renderBedrock(unit) {
+  const c = document.getElementById('bedrock-card');
+  c.hidden = false;
+  document.getElementById('bedrock-name').textContent = unit.name || unit.strat_name || 'Unnamed unit';
+
+  const periodTxt = unit.best_int_name
+    ? unit.best_int_name
+    : (unit.b_int_name === unit.t_int_name
+        ? unit.t_int_name
+        : `${unit.b_int_name} – ${unit.t_int_name}`);
+  document.getElementById('bedrock-period').textContent = periodTxt || '';
+
+  const liths = parseLith(unit.lith);
+  const cat   = categoryFromLith(liths);
+  const lithEl = document.getElementById('bedrock-lith');
+  lithEl.textContent = (cat ? cat.charAt(0).toUpperCase() + cat.slice(1) + ' — ' : '')
+                     + (liths.length ? liths.join(', ') : (unit.lith || 'unspecified'));
+
+  const ageRangeTxt = (unit.b_age != null && unit.t_age != null)
+    ? `${fmtAge(unit.b_age)} – ${fmtAge(unit.t_age)}`
+    : '(age unknown)';
+  const midAge = (unit.b_age != null && unit.t_age != null)
+    ? (unit.b_age + unit.t_age) / 2 : null;
+  document.getElementById('bedrock-age').innerHTML =
+    `Age range: <strong>${ageRangeTxt}</strong>` +
+    (midAge != null ? ` <span style="color:#788">(midpoint ${fmtAge(midAge)})</span>` : '');
+
+  document.getElementById('bedrock-desc').textContent = unit.descrip || '';
+}
+
+function fmtAge(myr) {
+  if (myr == null) return '?';
+  if (myr >= 1000) return (myr / 1000).toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + ' Gyr';
+  if (myr >= 10)   return Math.round(myr) + ' Myr';
+  if (myr >= 1)    return myr.toFixed(1) + ' Myr';
+  return Math.round(myr * 1000) + ' kyr';
+}
+
+// ============================================================
+// Render: photo ID card
+// ============================================================
+function renderPhotoId(id) {
+  const c = document.getElementById('id-card');
+  c.hidden = false;
+  document.getElementById('id-rock').textContent = id.rock_type || '(no name)';
+  const catEl = document.getElementById('id-category');
+  catEl.className = 'id-category ' + (id.category || '');
+  catEl.textContent = (id.category || '?')
+    + (id.confidence != null ? ` · ${Math.round(id.confidence * 100)}% conf` : '');
+
+  const ageEst = id.age_estimate_myr;
+  if (ageEst && ageEst.best_guess != null) {
+    const ageEl = document.getElementById('id-age');
+    ageEl.hidden = false;
+    ageEl.innerHTML =
+      `Estimated age: <strong>${fmtAge(ageEst.best_guess)}</strong>` +
+      (ageEst.min != null && ageEst.max != null
+        ? ` <span style="color:#788">(range ${fmtAge(ageEst.max)} – ${fmtAge(ageEst.min)})</span>`
+        : '');
+  }
+  document.getElementById('id-reasoning').textContent = id.reasoning || '';
+}
+
+// ============================================================
+// Timeline (log scale, 4.5 Gyr → today)
+// ============================================================
+const TL = {
+  vbW: 600,
+  pad: 14,
+  minAge: 0.01,    // 10 kyr (right edge)
+  maxAge: 4567,    // Earth formation (left edge)
+  bandY: 28,
+  bandH: 28,
+};
+
+function ageToX(age) {
+  const a    = Math.max(TL.minAge, Math.min(TL.maxAge, age));
+  const lMin = Math.log10(TL.minAge);
+  const lMax = Math.log10(TL.maxAge);
+  const t    = (Math.log10(a) - lMin) / (lMax - lMin);
+  // Older (large age) → left; younger (small age) → right
+  const span = TL.vbW - TL.pad * 2;
+  return TL.pad + span * (1 - t);
+}
+
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (text != null) el.textContent = text;
+  return el;
+}
+
+function renderTimeline() {
+  const svg = document.getElementById('timeline-svg');
+  svg.innerHTML = '';
+
+  // --- Eon bands ---
+  for (const eon of EONS) {
+    const x1 = ageToX(eon.start), x2 = ageToX(eon.end);
+    const w = x2 - x1;
+    if (w < 0.5) continue;
+    svg.appendChild(svgEl('rect', {
+      x: x1, y: TL.bandY, width: w, height: TL.bandH,
+      fill: eon.color, opacity: 0.55,
+    }));
+    if (w >= 24) {
+      svg.appendChild(svgEl('text', {
+        x: (x1 + x2) / 2, y: TL.bandY + TL.bandH / 2 + 4,
+        'text-anchor': 'middle', fill: '#fff',
+        'font-size': 10, 'font-weight': 600,
+        'letter-spacing': '0.05em',
+      }, eon.name.toUpperCase()));
+    }
+  }
+
+  // --- Period bands inside the Phanerozoic only, on a second row ---
+  const periodBandY = TL.bandY + TL.bandH + 4;
+  for (const p of PERIODS) {
+    const x1 = ageToX(p.start), x2 = ageToX(p.end);
+    const w = x2 - x1;
+    if (w < 0.5) continue;
+    svg.appendChild(svgEl('rect', {
+      x: x1, y: periodBandY, width: w, height: 14,
+      fill: p.color, opacity: 0.85,
+    }));
+  }
+
+  // --- Earth history events ---
+  const eventsY = periodBandY + 28;
+  let lastX = -100;
+  let altSide = false;
+  EARTH_EVENTS.forEach(ev => {
+    const x = ageToX(ev.age);
+    // Stagger labels that are too close
+    if (Math.abs(x - lastX) < 50) altSide = !altSide;
+    else altSide = false;
+    lastX = x;
+    const labelY = altSide ? eventsY + 14 : eventsY;
+
+    svg.appendChild(svgEl('line', {
+      x1: x, y1: TL.bandY, x2: x, y2: labelY - 2,
+      stroke: '#445', 'stroke-width': 1, 'stroke-dasharray': '2 2',
+    }));
+    svg.appendChild(svgEl('circle', {
+      cx: x, cy: labelY + 3, r: 2.5, fill: '#abb',
+    }));
+    // Anchor label to the LEFT of the event (so the older label sits on the older side)
+    svg.appendChild(svgEl('text', {
+      x: x - 5, y: labelY + 6,
+      'text-anchor': 'end',
+      fill: '#abb', 'font-size': 9,
+    }, ev.label));
+  });
+
+  // --- The rock's lifeline(s) ---
+  const rockY = eventsY + 60;
+  const rightX = ageToX(0.01);
+  const entries = collectRockEntries();
+  entries.forEach((e, i) => {
+    const yLine = rockY + i * 32;
+    const xOrig = ageToX(e.age);
+
+    // Thick lifeline from origin to today
+    svg.appendChild(svgEl('line', {
+      x1: xOrig, y1: yLine, x2: rightX, y2: yLine,
+      stroke: e.color, 'stroke-width': 4, 'stroke-linecap': 'round',
+      opacity: 0.9,
+    }));
+    // Origin "you formed here" dot
+    svg.appendChild(svgEl('circle', {
+      cx: xOrig, cy: yLine, r: 6,
+      fill: e.color, stroke: '#0a0e0f', 'stroke-width': 2,
+    }));
+
+    // Range bar if there's a range (b/t ages)
+    if (e.maxAge && e.minAge && e.maxAge > e.minAge) {
+      const xMax = ageToX(e.maxAge);
+      const xMin = ageToX(e.minAge);
+      svg.appendChild(svgEl('line', {
+        x1: xMax, y1: yLine - 8, x2: xMin, y2: yLine - 8,
+        stroke: e.color, 'stroke-width': 2, opacity: 0.5,
+        'stroke-linecap': 'round',
+      }));
+    }
+
+    // Label above the line
+    const usableSpan = TL.vbW - TL.pad * 2;
+    const distFromRight = TL.vbW - TL.pad - xOrig;
+    const placeRight = distFromRight > usableSpan * 0.40;
+    svg.appendChild(svgEl('text', {
+      x: placeRight ? xOrig + 10 : xOrig - 10,
+      y: yLine - 12,
+      'text-anchor': placeRight ? 'start' : 'end',
+      fill: '#e8eaed', 'font-size': 11, 'font-weight': 500,
+    }, `${e.label}  ${fmtAge(e.age)}`));
+  });
+
+  // --- Axis log-decade ticks ---
+  const axisY = rockY + entries.length * 32 + 14;
+  const decades = [4000, 1000, 100, 10, 1, 0.1];
+  decades.forEach(d => {
+    const x = ageToX(d);
+    svg.appendChild(svgEl('line', {
+      x1: x, y1: axisY, x2: x, y2: axisY + 4,
+      stroke: '#566', 'stroke-width': 1,
+    }));
+    svg.appendChild(svgEl('text', {
+      x: x, y: axisY + 14,
+      'text-anchor': 'middle', fill: '#788',
+      'font-size': 9, 'font-family': 'ui-monospace, monospace',
+    }, fmtAge(d)));
+  });
+
+  // --- "Today" tick at right edge ---
+  svg.appendChild(svgEl('line', {
+    x1: rightX, y1: TL.bandY - 4, x2: rightX, y2: axisY + 4,
+    stroke: '#FB8072', 'stroke-width': 1.5, 'stroke-dasharray': '3 3',
+    opacity: 0.7,
+  }));
+
+  // Final height
+  const totalH = axisY + 24;
+  svg.setAttribute('viewBox', `0 0 ${TL.vbW} ${totalH}`);
+  document.getElementById('timeline-card').hidden = false;
+
+  // Context callout
+  renderCallout(entries);
+}
+
+function collectRockEntries() {
+  const out = [];
+  if (state.bedrock) {
+    const b = state.bedrock;
+    const midAge = (b.b_age != null && b.t_age != null) ? (b.b_age + b.t_age) / 2 : (b.b_age || b.t_age);
+    if (midAge != null) {
+      out.push({
+        label: (b.name || b.strat_name || 'bedrock').slice(0, 32),
+        age: midAge,
+        minAge: b.t_age,
+        maxAge: b.b_age,
+        color: colorForAge(midAge),
+      });
+    }
+  }
+  if (state.photoId && state.photoId.age_estimate_myr && state.photoId.age_estimate_myr.best_guess != null) {
+    const a = state.photoId.age_estimate_myr;
+    out.push({
+      label: 'photo: ' + (state.photoId.rock_type || 'rock'),
+      age: a.best_guess,
+      minAge: a.min,
+      maxAge: a.max,
+      color: colorForAge(a.best_guess),
+    });
+  }
+  return out;
+}
+
+function renderCallout(entries) {
+  if (!entries.length) return;
+  const c = document.getElementById('callout');
+  c.hidden = false;
+
+  // Pick the more authoritative entry: bedrock > photo
+  const e = entries[0];
+  const age = e.age;
+  const lines = [];
+
+  // Find the matching event(s)
+  const olderEvents = EARTH_EVENTS.filter(ev => ev.age >= age * 0.95);
+  const youngerEvents = EARTH_EVENTS.filter(ev => ev.age < age && ev.age > age * 0.05);
+
+  lines.push(`<strong>This rock formed about ${fmtAge(age)} ago.</strong>`);
+
+  // Phrase comparisons
+  const compare = [];
+  if (age > 540)  compare.push('before the Cambrian explosion of complex animal life');
+  if (age > 2400) compare.push("before Earth's atmosphere had appreciable oxygen");
+  if (age > 470)  compare.push('older than the first land plants');
+  if (age > 252)  compare.push('older than every dinosaur lineage');
+  if (age > 66 && age < 252) compare.push('contemporary with the dinosaurs');
+  if (age < 66 && age > 2.6)  compare.push('formed after the dinosaurs went extinct');
+  if (age < 2.6)  compare.push('formed during the current ice age cycles');
+
+  if (compare.length) {
+    lines.push(`That's ${compare.slice(0, 2).join(' and ')}.`);
+  }
+
+  // K-Pg multiplier
+  const ratio = age / 66;
+  if (age > 66) {
+    lines.push(`It's <strong>${ratio.toFixed(ratio < 5 ? 1 : 0)}×</strong> the time since the dinosaurs went extinct.`);
+  }
+
+  c.innerHTML = lines.join(' ');
+}
+
+// ============================================================
+// Pipeline: location → bedrock
+// ============================================================
+async function runLocation() {
+  if (state.busy) return;
+  state.busy = true;
+  enterResultStep();
+  setStatus('Getting your location…', true);
+  try {
+    state.location = await getLocation();
+    setStatus(`Found you at ${state.location.lat.toFixed(3)}, ${state.location.lng.toFixed(3)}. Looking up bedrock…`, true);
+    state.bedrock = await getBedrockAt(state.location.lat, state.location.lng);
+    setStatus('');
+    renderBedrock(state.bedrock);
+    renderTimeline();
+  } catch (e) {
+    setStatus(e.message, false, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+// ============================================================
+// Pipeline: photo → Claude
+// ============================================================
+async function runPhoto(file) {
+  if (state.busy) return;
+  if (!file || !file.type.startsWith('image/')) {
+    setStatus('Please choose an image file.', false, true);
+    return;
+  }
+  if (!state.apiKey) {
+    setStatus('Add your Anthropic API key first (settings above).', false, true);
+    document.getElementById('key-details').open = true;
+    return;
+  }
+  state.busy = true;
+  enterResultStep();
+  setStatus('Preparing photo…', true);
+  try {
+    const { blob, dataUrl } = await shrinkBlob(file);
+    state.photoDataUrl = dataUrl;
+    const photoEl = document.getElementById('photo');
+    photoEl.src = dataUrl;
+    document.getElementById('photo-card').hidden = false;
+
+    setStatus('Asking Claude to identify the rock…', true);
+    state.photoId = await identifyRockPhoto(blob);
+    setStatus('');
+    renderPhotoId(state.photoId);
+    renderTimeline();
+  } catch (e) {
+    setStatus(e.message, false, true);
+  } finally {
+    state.busy = false;
+  }
+}
+
+// ============================================================
+// UI transitions
+// ============================================================
+function enterResultStep() {
+  document.getElementById('setup-step').hidden = true;
+  document.getElementById('result-step').hidden = false;
+  // Re-show photo card / bedrock card only if relevant
+  if (!state.photoDataUrl) document.getElementById('photo-card').hidden = true;
+}
+
+function reset() {
+  state.bedrock  = null;
+  state.photoId  = null;
+  state.location = null;
+  state.photoDataUrl = null;
+  document.getElementById('setup-step').hidden = false;
+  document.getElementById('result-step').hidden = true;
+  document.getElementById('id-card').hidden = true;
+  document.getElementById('bedrock-card').hidden = true;
+  document.getElementById('timeline-card').hidden = true;
+  document.getElementById('photo-card').hidden = true;
+  document.getElementById('callout').hidden = true;
+  document.getElementById('file-input').value = '';
+  setStatus('');
+}
+
+// ============================================================
+// Init / event wiring
+// ============================================================
+loadApiKey();
+
+document.getElementById('loc-btn').addEventListener('click', runLocation);
+document.getElementById('file-input').addEventListener('change', ev => {
+  if (ev.target.files[0]) runPhoto(ev.target.files[0]);
+});
+document.getElementById('reset-btn').addEventListener('click', reset);
+document.getElementById('api-key').addEventListener('input',  ev => saveApiKey(ev.target.value));
+document.getElementById('api-key').addEventListener('change', ev => saveApiKey(ev.target.value));
+</script>
+</body>
+</html>
