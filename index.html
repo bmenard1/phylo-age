@@ -286,10 +286,10 @@
   </div>
 
   <div class="card timeline-card" id="timeline-card" hidden>
-    <h2>On the timeline of life (last 600 Myr)</h2>
+    <h2>On the timeline of life (last 500 Myr)</h2>
     <svg class="timeline-svg" id="timeline-svg" viewBox="0 0 600 240" preserveAspectRatio="xMidYMid meet"></svg>
     <div class="timeline-axis-labels">
-      <span>600 Myr ago</span>
+      <span>500 Myr ago</span>
       <span>today</span>
     </div>
     <div class="callout" id="callout" hidden></div>
@@ -742,15 +742,17 @@ function renderLineage(rows) {
 // Render: time axis
 // ============================================================
 const TL = {
-  vbW: 600, vbH: 240,
+  vbW: 600, vbH: 260,
   pad: 14,
+  maxAge: 500,
   bandY: 28, bandH: 32,
   axisY: 80,
 };
 
 function ageToX(age) {
   const span = TL.vbW - TL.pad * 2;
-  const x = TL.pad + span * (1 - age / 600);
+  const a = Math.min(age, TL.maxAge);
+  const x = TL.pad + span * (1 - a / TL.maxAge);
   return Math.max(TL.pad, Math.min(TL.vbW - TL.pad, x));
 }
 
@@ -758,13 +760,6 @@ function renderTimeline(rows) {
   document.getElementById('timeline-card').hidden = false;
   const svg = document.getElementById('timeline-svg');
   svg.innerHTML = '';
-
-  // Pre-Cambrian background (>=600 Myr just on the left edge)
-  const preBg = svgEl('rect', {
-    x: 0, y: TL.bandY, width: TL.pad, height: TL.bandH,
-    fill: '#3a4040'
-  });
-  svg.appendChild(preBg);
 
   // Era labels (above bands)
   for (const era of ERAS) {
@@ -777,9 +772,11 @@ function renderTimeline(rows) {
     }, era.name.toUpperCase()));
   }
 
-  // Period bands
+  // Period bands — clip to maxAge on the left so we don't show invisible slivers
   for (const ep of EPOCHS) {
-    const x1 = ageToX(ep.start), x2 = ageToX(ep.end);
+    const visibleStart = Math.min(ep.start, TL.maxAge);
+    if (visibleStart <= ep.end) continue;
+    const x1 = ageToX(visibleStart), x2 = ageToX(ep.end);
     const w = x2 - x1;
     if (w < 0.5) continue;
     svg.appendChild(svgEl('rect', {
@@ -797,46 +794,49 @@ function renderTimeline(rows) {
 
   // Sort rows oldest first for stacking
   const sorted = rows
-    .filter(r => r.age != null && r.age <= 600 && r.age > 0)
+    .filter(r => r.age != null && r.age > 0)
     .slice()
     .sort((a, b) => b.age - a.age);
 
-  // Each row gets its own horizontal lifeline ending at "today" (right edge).
-  const rowH = 22;
-  const startY = TL.axisY + 4;
+  // Each row: label ABOVE the line, line + dot below. Two-row layout per entry.
+  const rowH = 30;
+  const labelOffset = 5;     // text baseline above the line
+  const startY = TL.axisY + 16;
   const rightX = ageToX(0);
 
   sorted.forEach((r, i) => {
-    const y = startY + i * rowH;
+    const yLine = startY + i * rowH;
     const xOrigin = ageToX(r.age);
 
-    // Lifeline (origin → today)
+    // Lifeline (origin → today) drawn first so the label sits above it
     svg.appendChild(svgEl('line', {
-      x1: xOrigin, y1: y, x2: rightX, y2: y,
+      x1: xOrigin, y1: yLine, x2: rightX, y2: yLine,
       stroke: r.epoch.color, 'stroke-width': 3, 'stroke-linecap': 'round',
       opacity: 0.85,
     }));
 
     // Origin dot
     svg.appendChild(svgEl('circle', {
-      cx: xOrigin, cy: y, r: 5,
+      cx: xOrigin, cy: yLine, r: 5,
       fill: r.epoch.color,
       stroke: '#0a0e0f', 'stroke-width': 2,
     }));
 
-    // Label (left of the dot if there's room, else right)
-    const labelText = `${r.name}  ${r.age} Myr`;
-    const placeRight = xOrigin < TL.vbW * 0.45;
+    // Label sits above the line, anchored to the dot. If the dot is too far
+    // right, anchor the label to the LEFT of it so the text doesn't fall off.
+    const usableSpan = TL.vbW - TL.pad * 2;
+    const distFromRight = TL.vbW - TL.pad - xOrigin;
+    const placeRight = distFromRight > usableSpan * 0.42;
     svg.appendChild(svgEl('text', {
-      x: placeRight ? xOrigin + 10 : xOrigin - 8,
-      y: y + 4,
+      x: placeRight ? xOrigin + 10 : xOrigin - 10,
+      y: yLine - labelOffset - 3,
       'text-anchor': placeRight ? 'start' : 'end',
-      fill: '#dde', 'font-size': 11,
-    }, labelText));
+      fill: '#e8eaed', 'font-size': 11,
+    }, `${r.name}  ${r.age} Myr`));
   });
 
-  // Total height adjust
-  const totalH = startY + sorted.length * rowH + 10;
+  // Total height adjust (give room for the last label + a little padding)
+  const totalH = startY + sorted.length * rowH + 18;
   svg.setAttribute('viewBox', `0 0 ${TL.vbW} ${Math.max(TL.vbH, totalH)}`);
 
   // "Today" tick at right edge
