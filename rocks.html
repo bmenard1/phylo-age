@@ -387,20 +387,17 @@ function colorForAge(myr) {
 // ============================================================
 // Earth-history anchor events (for context on the timeline)
 // ============================================================
+// Hand-picked anchors that don't clutter the log axis. Labels kept short
+// because the dense Hadean/Archean cluster compresses against the left edge.
 const EARTH_EVENTS = [
   { age: 4567, label: 'Earth forms' },
-  { age: 4400, label: 'First oceans' },
-  { age: 3500, label: 'Earliest fossil life' },
-  { age: 2400, label: 'Great Oxygenation Event' },
-  { age: 1500, label: 'First multicellular eukaryotes' },
+  { age: 3500, label: 'First life' },
+  { age: 2400, label: 'Oxygenation' },
   { age:  720, label: 'Snowball Earth' },
   { age:  540, label: 'Cambrian explosion' },
-  { age:  470, label: 'First land plants' },
-  { age:  380, label: 'First forests' },
+  { age:  470, label: 'Land plants' },
   { age:  252, label: 'Permian extinction' },
-  { age:  230, label: 'First dinosaurs' },
   { age:   66, label: 'K-Pg extinction' },
-  { age:  2.6, label: 'Ice ages begin' },
   { age:  0.3, label: 'Modern humans' },
 ];
 
@@ -730,35 +727,58 @@ function renderTimeline() {
     }));
   }
 
-  // --- Earth history events ---
-  const eventsY = periodBandY + 28;
-  let lastX = -100;
-  let altSide = false;
-  EARTH_EVENTS.forEach(ev => {
-    const x = ageToX(ev.age);
-    // Stagger labels that are too close
-    if (Math.abs(x - lastX) < 50) altSide = !altSide;
-    else altSide = false;
-    lastX = x;
-    const labelY = altSide ? eventsY + 14 : eventsY;
+  // --- Earth history events (multi-row lane placement so labels never overlap) ---
+  const eventsY = periodBandY + 26;
+  const fontSize = 9;
+  const charW = 4.7;                                  // empirical for system-ui at 9px
+  const eventRowH = 12;
+  const maxEventRows = 3;
+  const rowLastEndX = new Array(maxEventRows).fill(-1e6);
 
+  // Sort by x (left → right) so the lane packing works.
+  const sortedEvents = EARTH_EVENTS
+    .slice()
+    .sort((a, b) => ageToX(a.age) - ageToX(b.age));
+
+  let eventsUsedRows = 1;
+  sortedEvents.forEach(ev => {
+    const x = ageToX(ev.age);
+    const labelW = ev.label.length * charW + 4;
+    // Anchor label to the right of the dot for everything except events
+    // that would overflow the right edge.
+    const anchorEnd = x + labelW + 6 > TL.vbW - TL.pad;
+    const startX = anchorEnd ? x - labelW - 5 : x + 5;
+    const endX   = anchorEnd ? x - 5            : x + labelW + 5;
+
+    // First lane (top-down) where this label can sit without overlap.
+    let row = -1;
+    for (let i = 0; i < maxEventRows; i++) {
+      if (startX > rowLastEndX[i] + 2) { row = i; break; }
+    }
+    if (row === -1) return;                            // can't fit — drop silently
+    rowLastEndX[row] = endX;
+    if (row + 1 > eventsUsedRows) eventsUsedRows = row + 1;
+
+    const yLabel = eventsY + row * eventRowH;
+
+    // Dashed leader from the bands down to the event row
     svg.appendChild(svgEl('line', {
-      x1: x, y1: TL.bandY, x2: x, y2: labelY - 2,
+      x1: x, y1: TL.bandY, x2: x, y2: yLabel + 4,
       stroke: '#445', 'stroke-width': 1, 'stroke-dasharray': '2 2',
     }));
     svg.appendChild(svgEl('circle', {
-      cx: x, cy: labelY + 3, r: 2.5, fill: '#abb',
+      cx: x, cy: yLabel + 4, r: 2.5, fill: '#abb',
     }));
-    // Anchor label to the LEFT of the event (so the older label sits on the older side)
     svg.appendChild(svgEl('text', {
-      x: x - 5, y: labelY + 6,
-      'text-anchor': 'end',
-      fill: '#abb', 'font-size': 9,
+      x: anchorEnd ? x - 5 : x + 5,
+      y: yLabel + 7,
+      'text-anchor': anchorEnd ? 'end' : 'start',
+      fill: '#abb', 'font-size': fontSize,
     }, ev.label));
   });
 
   // --- The rock's lifeline(s) ---
-  const rockY = eventsY + 60;
+  const rockY = eventsY + eventsUsedRows * eventRowH + 24;
   const rightX = ageToX(0.01);
   const entries = collectRockEntries();
   entries.forEach((e, i) => {
