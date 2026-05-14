@@ -549,8 +549,14 @@ const state = {
 // ============================================================
 const KEY_STORAGE = 'phyloage.plantnet.key';
 
+// Default Pl@ntNet API key baked in for convenience. Locked down at
+// my.plantnet.org with an IP allowlist + Origin restriction to
+// https://bmenard1.github.io so it only works from this site/network.
+// Any localStorage value overrides it.
+const DEFAULT_PLANTNET_KEY = '2b102NH7UVLYqy6cQmumY4gu';
+
 function loadApiKey() {
-  state.apiKey = localStorage.getItem(KEY_STORAGE) || '';
+  state.apiKey = localStorage.getItem(KEY_STORAGE) || DEFAULT_PLANTNET_KEY || '';
   document.getElementById('api-key').value = state.apiKey;
   updateKeyStatus();
 }
@@ -974,6 +980,9 @@ document.getElementById('api-key').addEventListener('change', ev => saveApiKey(e
 
 // Open the key panel automatically if no key is set
 if (!state.apiKey) document.getElementById('key-details').open = true;
+// Hide the setup panel if we're running with the baked-in default key
+// (uncomment if you want the panel collapsed by default)
+// else document.getElementById('key-details').open = false;
 
 // Allow upload zone to respond to keyboard (Enter/Space)
 document.querySelector('.upload-zone').addEventListener('keydown', ev => {
